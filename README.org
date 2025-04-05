@@ -1,0 +1,14 @@
+#+TITLE: mbzlists-resolvers
+
+* Subsonic API test                                                    :verb:
+template http://192.168.0.103:4533/rest
+Accept: application/json
+
+** Auth and basics
+get ?u=lepisma&v=1.12.0&c=verb&p={{(url-hexify-string "uSv^TK\\M@N-20.Z(+!g+#-b8")}}&f=json
+
+*** Perform Search
+get /search2?query={{(url-hexify-string "every breaking")}}
+
+*** Make Playlist
+get /createPlaylist?name=test&songId=38e183d0562c07677b84a4b0141f0812&songId=28f9b176d7f0b7789b1c3a24ff7ecfc6
