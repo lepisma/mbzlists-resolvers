@@ -128,6 +128,9 @@ fn main() {
     }
 
     info!("Resolved total {} tracks", ss_tracks.len());
-    ss_client.create_playlist(pl_name.clone(), ss_tracks).unwrap();
-    info!("Created playlist: {pl_name}");
+
+    if !ss_tracks.is_empty() {
+        ss_client.create_playlist(pl_name.clone(), ss_tracks).unwrap();
+        info!("Created playlist: {pl_name}");
+    }
 }
