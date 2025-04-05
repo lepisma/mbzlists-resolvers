@@ -1,6 +1,7 @@
 #+TITLE: mbzlists-resolvers
 
-Content resolvers and playlist importers for XSPF files from [[https://mbzlists.com/][mbzlists]].
+Content resolvers and playlist importers for XSPF files from [[https://mbzlists.com/][mbzlists]]. This is
+under development so command line usage might change.
 
 ** Importing Playlists
 For subsonic compatible media servers (including navidrome), do this:
