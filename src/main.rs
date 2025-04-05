@@ -127,7 +127,7 @@ fn main() {
         }
     }
 
-    info!("Resolves total {} tracks", ss_tracks.len());
+    info!("Resolved total {} tracks", ss_tracks.len());
     ss_client.create_playlist(pl_name.clone(), ss_tracks).unwrap();
     info!("Created playlist: {pl_name}");
 }
