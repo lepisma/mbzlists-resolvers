@@ -18,7 +18,8 @@ enum Platforms {
 
         #[arg(long)]
         no_create: bool,
-    }
+    },
+    Spotify,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -43,7 +44,8 @@ struct Track {
 }
 
 
-fn main() {
+#[actix_web::main]
+async fn main() {
     let args = Args::parse();
     env_logger::init();
 
@@ -75,6 +77,10 @@ fn main() {
                 ss_client.create_playlist(pl_name.clone(), ss_tracks).unwrap();
                 info!("Created playlist: {pl_name}");
             }
+        },
+        Platforms::Spotify => {
+            info!("Starting webapp for Spotify resolution");
+            platform::spotify::serve().await.unwrap();
         }
     }
 }
