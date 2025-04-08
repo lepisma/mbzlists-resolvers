@@ -1,6 +1,10 @@
 use actix_web::{web, App, HttpServer, HttpResponse, Responder, get};
 use url::Url;
+use anyhow::Result;
 
+use crate::mbzlists::Track;
+
+const API_ROOT: &str = "https://api.spotify.com/v1";
 
 #[get("/spotify")]
 async fn home() -> impl Responder {
@@ -23,6 +27,48 @@ async fn login() -> impl Responder {
     ).unwrap();
 
     HttpResponse::Found().append_header(("Location", auth_url.to_string())).finish()
+}
+
+#[derive(serde::Deserialize, Debug, Clone)]
+pub struct SpotifyTrack {
+    id: String,
+    name: String,
+    artists: Vec<String>,
+    album: String,
+}
+
+pub struct SpotifyPlaylist {
+    id: String,
+    url: String,
+}
+async fn create_playlist(name: String, tracks: Vec<SpotifyTrack>, user_id: String, access_token: String) -> Result<SpotifyPlaylist> {
+    let client = reqwest::Client::new();
+
+    let playlist_resp = client
+        .post(format!("{API_ROOT}/users/{user_id}/playlists"))
+        .bearer_auth(&access_token)
+        .json(&serde_json::json!({
+            "name": name,
+            "public": false,
+            "description": "Imported from mbzlists"
+        }))
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+
+    let playlist_id = playlist_resp["id"].as_str().unwrap();
+    let playlist_url = playlist_resp["external_urls"]["spotify"].as_str().unwrap();
+
+    client.post(format!("{API_ROOT}/playlists/{playlist_id}/tracks"))
+        .bearer_auth(&access_token)
+        .json(&serde_json::json!({
+            "uris": tracks.iter().map(|t| format!("spotify:track:{}", t.id)).collect::<Vec<String>>()
+        }))
+        .send()
+        .await?;
+
+    Ok(SpotifyPlaylist { id: playlist_id.to_string(), url: playlist_url.to_string() })
 }
 
 #[derive(serde::Deserialize)]
@@ -68,24 +114,9 @@ async fn callback(query: web::Query<AuthQuery>) -> impl Responder {
         .unwrap();
 
     let user_id = user_resp["id"].as_str().unwrap();
+    let spotify_playlist = create_playlist("Rusty List".to_string(), vec![], user_id.to_string(), access_token.to_string()).await.unwrap();
 
-    let playlist_resp = client
-        .post(format!("https://api.spotify.com/v1/users/{}/playlists", user_id))
-        .bearer_auth(access_token)
-        .json(&serde_json::json!({
-            "name": "Rusty Playlist",
-            "public": false,
-            "description": "Created from Rust"
-        }))
-        .send()
-        .await
-        .unwrap()
-        .json::<serde_json::Value>()
-        .await
-        .unwrap();
-
-    let url = playlist_resp["external_urls"]["spotify"].as_str().unwrap();
-    HttpResponse::Ok().body(format!("✅ Playlist created: <a href='{}'>{}</a>", url, url))
+    HttpResponse::Ok().body(format!("Playlist created: <a href='{}'>{}</a>", spotify_playlist.url, spotify_playlist.url))
 }
 
 pub async fn serve() -> std::io::Result<()> {
