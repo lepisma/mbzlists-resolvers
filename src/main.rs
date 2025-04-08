@@ -1,11 +1,22 @@
 use anyhow::{anyhow, Result};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use log::info;
 
 #[derive(Parser, Debug)]
 struct Args {
-    xspf: std::path::PathBuf,
-    name: Option<String>
+    #[command(subcommand)]
+    platform: Platforms,
+}
+
+#[derive(Subcommand, Debug)]
+enum Platforms {
+    Subsonic {
+        xspf: std::path::PathBuf,
+        name: Option<String>,
+
+        #[arg(long)]
+        no_create: bool,
+    }
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -105,32 +116,36 @@ fn main() {
     let args = Args::parse();
     env_logger::init();
 
-    let xspf_string = std::fs::read_to_string(args.xspf).unwrap();
-    let pl: Playlist = serde_xml_rs::from_str(&xspf_string).unwrap();
-    let pl_name = args.name.unwrap_or(pl.title.clone());
+    match args.platform {
+        Platforms::Subsonic { xspf, name, no_create } => {
+            let xspf_string = std::fs::read_to_string(xspf).unwrap();
+            let pl: Playlist = serde_xml_rs::from_str(&xspf_string).unwrap();
+            let pl_name = name.unwrap_or(pl.title.clone());
 
-    info!("Read total {} tracks in the file", pl.tracklist.tracks.len());
+            info!("Read total {} tracks in the file", pl.tracklist.tracks.len());
 
-    let ss_client = SubsonicClient {
-        root: format!("{}/rest", std::env::var("SS_HOST").expect("SS_HOST not set")),
-        user: std::env::var("SS_USER").expect("SS_USER not set"),
-        version: "1.12.0".to_string(),
-        client: "mbzlists-resolvers".to_string(),
-        password: urlencoding::encode(&std::env::var("SS_PASS").expect("SS_PASS not set")).to_string(),
-    };
+            let ss_client = SubsonicClient {
+                root: format!("{}/rest", std::env::var("SS_HOST").expect("SS_HOST not set")),
+                user: std::env::var("SS_USER").expect("SS_USER not set"),
+                version: "1.12.0".to_string(),
+                client: "mbzlists-resolvers".to_string(),
+                password: urlencoding::encode(&std::env::var("SS_PASS").expect("SS_PASS not set")).to_string(),
+            };
 
-    let mut ss_tracks = vec![];
-    for track in &pl.tracklist.tracks {
-        match ss_client.resolve(track) {
-            Some(ss_track) => ss_tracks.push(ss_track),
-            None => info!("Unable to resolve {:?}", track)
+            let mut ss_tracks = vec![];
+            for track in &pl.tracklist.tracks {
+                match ss_client.resolve(track) {
+                    Some(ss_track) => ss_tracks.push(ss_track),
+                    None => info!("Unable to resolve {:?}", track)
+                }
+            }
+
+            info!("Resolved total {} tracks", ss_tracks.len());
+
+            if !ss_tracks.is_empty() && !no_create {
+                ss_client.create_playlist(pl_name.clone(), ss_tracks).unwrap();
+                info!("Created playlist: {pl_name}");
+            }
         }
-    }
-
-    info!("Resolved total {} tracks", ss_tracks.len());
-
-    if !ss_tracks.is_empty() {
-        ss_client.create_playlist(pl_name.clone(), ss_tracks).unwrap();
-        info!("Created playlist: {pl_name}");
     }
 }
