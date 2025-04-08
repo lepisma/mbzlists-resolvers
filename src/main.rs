@@ -1,8 +1,10 @@
 use clap::{Parser, Subcommand};
 use log::info;
 use platform::subsonic::SubsonicClient;
+use anyhow::Result;
 
 mod platform;
+mod mbzlists;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -22,37 +24,14 @@ enum Platforms {
     Spotify,
 }
 
-#[derive(serde::Deserialize, Debug)]
-#[serde(rename = "playlist")]
-struct Playlist {
-    title: String,
-    tracklist: Tracklist,
-}
-
-#[derive(serde::Deserialize, Debug)]
-#[serde(rename = "tracklist")]
-struct Tracklist {
-    #[serde(rename = "track")]
-    tracks: Vec<Track>,
-}
-
-#[derive(serde::Deserialize, Debug)]
-#[serde(rename = "track")]
-struct Track {
-    title: String,
-    creator: String,
-}
-
-
 #[actix_web::main]
-async fn main() {
+async fn main() -> Result<()> {
     let args = Args::parse();
     env_logger::init();
 
     match args.platform {
         Platforms::Subsonic { xspf, name, no_create } => {
-            let xspf_string = std::fs::read_to_string(xspf).unwrap();
-            let pl: Playlist = serde_xml_rs::from_str(&xspf_string).unwrap();
+            let pl = mbzlists::Playlist::from_xspf(xspf)?;
             let pl_name = name.unwrap_or(pl.title.clone());
 
             info!("Read total {} tracks in the file", pl.tracklist.tracks.len());
@@ -77,10 +56,11 @@ async fn main() {
                 ss_client.create_playlist(pl_name.clone(), ss_tracks).unwrap();
                 info!("Created playlist: {pl_name}");
             }
+            Ok(())
         },
         Platforms::Spotify => {
             info!("Starting webapp for Spotify resolution");
-            platform::spotify::serve().await.unwrap();
+            Ok(platform::spotify::serve().await?)
         }
     }
 }

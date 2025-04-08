@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use crate::Track;
+use crate::mbzlists::Track;
 
 #[derive(serde::Deserialize, Debug, Clone)]
 pub struct SubsonicTrack {
