@@ -10,5 +10,5 @@ For subsonic compatible media servers (including navidrome), do this:
   # Set the following environment variables:
   # SS_HOST (something like http://192.168.0.101:4533), SS_USER, and SS_PASS
 
-  mbzlists-resolvers <spiff-file> [optional playlist name]
+  mbzlists-resolvers subsonic <spiff-file> [playlist-name]
 #+end_src
