@@ -6,4 +6,4 @@ COPY target/release/mbzlists-resolvers /usr/local/bin/mbzlists-resolvers
 
 EXPOSE 8888
 
-ENTRYPOINT ["/usr/local/bin/mbzlists-resolvers"]
+ENTRYPOINT ["/usr/local/bin/mbzlists-resolvers", "webapp"]
