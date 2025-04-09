@@ -16,6 +16,7 @@ For Spotify, open the webapp and follow instructions:
 
 #+begin_src shell
   # Set SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI
+  # Use MBZR_HOST and MBZR_PORT to control networking
   mbzlists-resolvers webapp
 #+end_src
 

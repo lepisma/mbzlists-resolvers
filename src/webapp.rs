@@ -34,6 +34,8 @@ async fn home() -> impl Responder {
 
 pub async fn serve() -> std::io::Result<()> {
     let secret_key = Key::generate();
+    let host = std::env::var("MBZR_HOST").unwrap_or("127.0.0.1".to_string());
+    let port = std::env::var("MBZR_PORT").unwrap_or("8888".to_string()).parse::<u16>().unwrap();
 
     HttpServer::new(move || {
         App::new()
@@ -43,7 +45,7 @@ pub async fn serve() -> std::io::Result<()> {
             .service(spotify::callback)
             .service(spotify::create)
     })
-    .bind(("127.0.0.1", 8888))?
+    .bind((host, port))?
     .run()
     .await
 }
