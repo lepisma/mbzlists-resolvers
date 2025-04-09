@@ -1,5 +1,5 @@
 use actix_session::{storage::CookieSessionStore, Session, SessionMiddleware};
-use actix_web::{cookie::Key, get, http::{header::ContentType, StatusCode}, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{cookie::Key, get, http::StatusCode, web, App, HttpResponse, HttpServer, Responder};
 use log::debug;
 use url::Url;
 use anyhow::Result;
