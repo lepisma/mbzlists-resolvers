@@ -1,90 +1,13 @@
-use actix_session::{storage::CookieSessionStore, Session, SessionMiddleware};
-use actix_web::{cookie::Key, get, http::StatusCode, web, App, HttpResponse, HttpServer, Responder};
+use actix_session::Session;
+use actix_web::{get, http::StatusCode, web, HttpResponse, Responder};
 use log::debug;
 use url::Url;
 use anyhow::Result;
 
 use crate::mbzlists::{self, Track};
+use crate::view::generate_page;
 
 const API_ROOT: &str = "https://api.spotify.com/v1";
-
-fn generate_page(body: &str) -> String {
-    format!("<!DOCTYPE html>
-<html lang=\"en\">
-<head>
-  <meta charset=\"UTF-8\">
-  <title>mbzlist-resolvers</title>
-  <style>
-    body {{
-      font-family: monospace;
-      font-size: 16px;
-      line-height: 1.6;
-      margin: 2rem;
-      background: #f4f4f4;
-      color: #333;
-    }}
-    h1 {{
-      font-size: 2rem;
-      margin-bottom: 1rem;
-    }}
-    h2 {{
-      font-size: 1.25rem;
-      margin-bottom: 0.5rem;
-    }}
-    p {{
-      margin-bottom: 1rem;
-      color: #555;
-    }}
-    .btn {{
-      background: #444;
-      color: white;
-      border: none;
-      padding: 0.5rem 1rem;
-      border-radius: 4px;
-      cursor: pointer;
-      font-family: inherit;
-      text-decoration: none;
-    }}
-    .btn:hover {{
-      background: #222;
-    }}
-    .card {{
-      background: #e0e0e0;
-      border-radius: 8px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }}
-  </style>
-</head>
-<body>
-  {body}
-</body>
-</html>")
-}
-
-fn generate_home_page() -> String {
-    generate_page("
-  <h1>mbzlists-resolvers</h1>
-  <p>Resolvers are tools that map and convert mbzlists entities to equivalent entities on other platforms.</p>
-
-  <div class=\"card\">
-    <h2><i>mbzlists → Spotify</i></h2>
-    <p>While you can search and play individual songs on Spotify via the mbzlists web app itself, this tool allows you to export an mbzlists playlist to Spotify.</p>
-    <a class=\"btn\" href=\"/spotify/login\">Proceed to Login</a>
-  </div>
-
-  <div class=\"card\">
-    <h2><i>mbzlists → YouTube</i></h2>
-    <p>As of now, you can create a temporary playlist from the mbzlists webapp. This is not importable to your account though. That's a work in progress.</p>
-  </div>
-
-  <div class=\"card\">
-    <h2><i>mbzlists → Subsonic Compatible Server</i></h2>
-    <p>You can import xspf files from mbzlists to any subsonic compatible media server using the mbzlists-resolvers command line tool.</p>
-    <a class=\"btn\" href=\"https://github.com/lepisma/mbzlists-resolvers\">Open Documentation</a>
-  </div>")
-}
 
 fn generate_spotify_upload_page() -> String {
     generate_page("<div class=\"card\">
@@ -104,15 +27,8 @@ fn generate_playlist_success_page(playlist_url: String) -> String {
 </div>"))
 }
 
-#[get("/")]
-async fn home() -> impl Responder {
-    HttpResponse::build(StatusCode::OK)
-        .content_type("text/html; charset=utf-8")
-        .body(generate_home_page())
-}
-
 #[get("/spotify/login")]
-async fn login() -> impl Responder {
+pub async fn login() -> impl Responder {
     let client_id = std::env::var("SPOTIFY_CLIENT_ID").unwrap();
     let redirect_uri = std::env::var("SPOTIFY_REDIRECT_URI").unwrap();
 
@@ -287,7 +203,7 @@ struct AuthQuery {
 }
 
 #[get("/spotify/callback")]
-async fn callback(query: web::Query<AuthQuery>, session: Session) -> impl Responder {
+pub async fn callback(query: web::Query<AuthQuery>, session: Session) -> impl Responder {
     let access_token = get_access_token(&query.code).await.unwrap();
     let user_id = get_current_user_id(&access_token).await.unwrap();
 
@@ -305,7 +221,7 @@ struct CreateQuery {
 }
 
 #[get("/spotify/create")]
-async fn create(query: web::Query<CreateQuery>, session: Session) -> impl Responder {
+pub async fn create(query: web::Query<CreateQuery>, session: Session) -> impl Responder {
     let mbzlist_url = query.url.clone();
     let access_token: Option<String> = session.get("access_token").unwrap_or(None);
     let user_id: Option<String> = session.get("user_id").unwrap_or(None);
@@ -334,20 +250,4 @@ async fn create(query: web::Query<CreateQuery>, session: Session) -> impl Respon
     HttpResponse::build(StatusCode::OK)
         .content_type("text/html; charset=utf-8")
         .body(generate_playlist_success_page(spotify_playlist.url))
-}
-
-pub async fn serve() -> std::io::Result<()> {
-    let secret_key = Key::generate();
-
-    HttpServer::new(move || {
-        App::new()
-            .wrap(SessionMiddleware::builder(CookieSessionStore::default(), secret_key.clone()).build())
-            .service(home)
-            .service(login)
-            .service(callback)
-            .service(create)
-    })
-    .bind(("127.0.0.1", 8888))?
-    .run()
-    .await
 }

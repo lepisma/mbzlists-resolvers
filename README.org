@@ -1,7 +1,6 @@
 #+TITLE: mbzlists-resolvers
 
-Content resolvers and playlist importers for XSPF files from [[https://mbzlists.com/][mbzlists]]. This is
-under development so command line usage might change.
+Content resolvers and playlist importers for [[https://mbzlists.com/][mbzlists]].
 
 ** Importing Playlists
 For subsonic compatible media servers (including navidrome), do this:
@@ -12,3 +11,12 @@ For subsonic compatible media servers (including navidrome), do this:
 
   mbzlists-resolvers subsonic <spiff-file> [playlist-name]
 #+end_src
+
+For Spotify, open the webapp and follow instructions:
+
+#+begin_src shell
+  # Set SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI
+  mbzlists-resolvers webapp
+#+end_src
+
+This is also deployed on https://resolvers.mbzlists.com.

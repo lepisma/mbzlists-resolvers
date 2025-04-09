@@ -4,6 +4,8 @@ use platform::subsonic::SubsonicClient;
 use anyhow::Result;
 
 mod platform;
+mod webapp;
+mod view;
 mod mbzlists;
 
 #[derive(Parser, Debug)]
@@ -21,7 +23,7 @@ enum Platforms {
         #[arg(long)]
         no_create: bool,
     },
-    Spotify,
+    Webapp,
 }
 
 #[actix_web::main]
@@ -58,9 +60,8 @@ async fn main() -> Result<()> {
             }
             Ok(())
         },
-        Platforms::Spotify => {
-            info!("Starting webapp for Spotify resolution");
-            Ok(platform::spotify::serve().await?)
+        Platforms::Webapp => {
+            Ok(webapp::serve().await?)
         }
     }
 }
