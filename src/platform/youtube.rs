@@ -3,7 +3,7 @@ use actix_web::{get, web, error, HttpResponse, Responder};
 use serde::Deserialize;
 use url::Url;
 use askama::Template;
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 
 use crate::webapp::{PlCreatePageTemplate, PlCreatedPageTemplate};
 
@@ -54,13 +54,13 @@ struct AuthQuery {
 }
 
 #[get("/youtube/callback")]
-pub async fn callback(query: web::Query<AuthQuery>, session: Session) -> impl Responder {
+pub async fn callback(query: web::Query<AuthQuery>, session: Session) -> Result<impl Responder, error::Error> {
     let access_token = get_access_token(&query.code).await.unwrap();
     session.insert("access_token", &access_token).unwrap();
 
     if let Some(mbzlists_url) = session.get::<String>("mbzlists_url").unwrap_or(None) {
         let create_url = format!("/youtube/create?mbzlists_url={}", mbzlists_url);
-        return HttpResponse::Found().append_header(("Location", create_url)).finish();
+        return Ok(HttpResponse::Found().append_header(("Location", create_url)).finish());
     }
 
     let body = (PlCreatePageTemplate {
@@ -69,7 +69,7 @@ pub async fn callback(query: web::Query<AuthQuery>, session: Session) -> impl Re
     })
         .render()
         .unwrap();
-    HttpResponse::Ok().content_type("text/html").body(body)
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
 #[derive(Deserialize)]
@@ -78,25 +78,27 @@ struct CreateQuery {
 }
 
 #[get("/youtube/create")]
-pub async fn create(query: web::Query<CreateQuery>, session: Session) -> impl Responder {
+pub async fn create(query: web::Query<CreateQuery>, session: Session) -> Result<impl Responder, error::Error> {
     let mbzlists_url = &query.mbzlists_url;
     let access_token: Option<String> = session.get("access_token").unwrap_or(None);
 
     if access_token.is_none() {
-        return HttpResponse::Found()
+        return Ok(HttpResponse::Found()
             .append_header(("Location", format!("/youtube/login?mbzlists_url={}", mbzlists_url)))
-            .finish();
+            .finish());
     }
 
     let access_token = access_token.unwrap();
 
-    let playlist = crate::mbzlists::Playlist::from_url(mbzlists_url.clone()).await.unwrap();
-
-    let yt_playlist_id = create_yt_playlist(&playlist.title, &access_token).await.unwrap();
+    let playlist = crate::mbzlists::Playlist::from_url(mbzlists_url.clone()).await.map_err(error::ErrorInternalServerError)?;
+    let yt_playlist_id = create_yt_playlist(&playlist.title, &access_token).await.map_err(error::ErrorInternalServerError)?;
 
     for track in playlist.tracklist.tracks {
-        if let Some(video_id) = search_youtube(&track.title, &track.creator, &access_token).await {
-            add_video_to_playlist(&yt_playlist_id, &video_id, &access_token).await.unwrap();
+        match search_youtube(&track.title, &track.creator, &access_token).await {
+            Ok(video_id) => add_video_to_playlist(&yt_playlist_id, &video_id, &access_token).await.map_err(error::ErrorInternalServerError)?,
+            // This is a little aggressive, but there are very less chance of a
+            // youtube search not returning anything in normal cases
+            Err(err) => return Err(error::ErrorInternalServerError(err))
         }
     }
 
@@ -108,13 +110,13 @@ pub async fn create(query: web::Query<CreateQuery>, session: Session) -> impl Re
         .render()
         .unwrap();
 
-    HttpResponse::Ok().content_type("text/html").body(body)
+    Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
-async fn get_access_token(code: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let client_id = std::env::var("GOOGLE_CLIENT_ID")?;
-    let client_secret = std::env::var("GOOGLE_CLIENT_SECRET")?;
-    let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI")?;
+async fn get_access_token(code: &str) -> Result<String> {
+    let client_id = std::env::var("GOOGLE_CLIENT_ID").context("Missing GOOGLE_CLIENT_ID env variable")?;
+    let client_secret = std::env::var("GOOGLE_CLIENT_SECRET").context("Missing GOOGLE_CLIENT_SECRET env variable")?;
+    let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI").context("Missing GOOGLE_REDIRECT_URI env variable")?;
 
     let params = [
         ("code", code),
@@ -124,18 +126,32 @@ async fn get_access_token(code: &str) -> Result<String, Box<dyn std::error::Erro
         ("grant_type", "authorization_code"),
     ];
 
-    let resp = reqwest::Client::new()
+    let client = reqwest::Client::new();
+    let res = client
         .post("https://oauth2.googleapis.com/token")
         .form(&params)
         .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
+        .await
+        .context("Failed to send token request")?;
 
-    Ok(resp["access_token"].as_str().unwrap().to_string())
+    let status = res.status();
+    let body = res.text().await.context("Failed to read response body")?;
+
+    if status != reqwest::StatusCode::OK {
+        return Err(anyhow!("Token exchange failed: {} - {}", status, body));
+    }
+
+    let json: serde_json::Value = serde_json::from_str(&body).context("Failed to parse JSON response")?;
+
+    let token = json
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing access_token in response"))?;
+
+    Ok(token.to_string())
 }
 
-async fn create_yt_playlist(title: &str, access_token: &str) -> Result<String, Box<dyn std::error::Error>> {
+async fn create_yt_playlist(title: &str, access_token: &str) -> Result<String> {
     let body = serde_json::json!({
         "snippet": {
             "title": title,
@@ -146,44 +162,69 @@ async fn create_yt_playlist(title: &str, access_token: &str) -> Result<String, B
         }
     });
 
-    let resp = reqwest::Client::new()
+    let client = reqwest::Client::new();
+    let res = client
         .post("https://www.googleapis.com/youtube/v3/playlists?part=snippet,status")
         .bearer_auth(access_token)
         .json(&body)
         .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
+        .await
+        .context("Failed to send create playlist request")?;
 
-    Ok(resp["id"].as_str().unwrap().to_string())
+    let status = res.status();
+    let body_text = res.text().await.context("Failed to read playlist response body")?;
+
+    if status != reqwest::StatusCode::OK {
+        return Err(anyhow!("YouTube playlist creation failed: {} - {}", status, body_text));
+    }
+
+    let json: serde_json::Value =
+        serde_json::from_str(&body_text).context("Failed to parse playlist JSON response")?;
+
+    let playlist_id = json
+        .get("id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing playlist ID in response"))?;
+
+    Ok(playlist_id.to_string())
 }
 
-async fn search_youtube(title: &str, artist: &str, access_token: &str) -> Option<String> {
+async fn search_youtube(title: &str, artist: &str, access_token: &str) -> Result<String> {
     let query = format!("{} {}", title, artist);
     let url = format!(
         "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q={}",
         urlencoding::encode(&query)
     );
 
-    let resp = reqwest::Client::new()
+    let client = reqwest::Client::new();
+    let res = client
         .get(&url)
         .bearer_auth(access_token)
         .send()
         .await
-        .ok()?
-        .json::<serde_json::Value>()
-        .await
-        .ok()?;
+        .context("Failed to send search request")?;
 
-    resp["items"]
-        .get(0)?
-        .get("id")?
-        .get("videoId")?
-        .as_str()
-        .map(|s| s.to_string())
+    let status = res.status();
+    let body_text = res.text().await.context("Failed to read search response body")?;
+
+    if status != reqwest::StatusCode::OK {
+        return Err(anyhow!("YouTube search failed: {} - {}", status, body_text));
+    }
+
+    let json: serde_json::Value =
+        serde_json::from_str(&body_text).context("Failed to parse search JSON response")?;
+
+    let video_id = json["items"]
+        .get(0)
+        .and_then(|item| item.get("id"))
+        .and_then(|id| id.get("videoId"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("No videoId found in search results"))?;
+
+    Ok(video_id.to_string())
 }
 
-async fn add_video_to_playlist(playlist_id: &str, video_id: &str, access_token: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn add_video_to_playlist(playlist_id: &str, video_id: &str, access_token: &str) -> Result<()> {
     let body = serde_json::json!({
         "snippet": {
             "playlistId": playlist_id,
@@ -194,12 +235,21 @@ async fn add_video_to_playlist(playlist_id: &str, video_id: &str, access_token: 
         }
     });
 
-    reqwest::Client::new()
+    let client = reqwest::Client::new();
+    let res = client
         .post("https://www.googleapis.com/youtube/v3/playlistItems?part=snippet")
         .bearer_auth(access_token)
         .json(&body)
         .send()
-        .await?;
+        .await
+        .context("Failed to send add-to-playlist request")?;
+
+    let status = res.status();
+    let body_text = res.text().await.context("Failed to read add-to-playlist response body")?;
+
+    if status != reqwest::StatusCode::OK {
+        return Err(anyhow!("Failed to add video to playlist: {} - {}", status, body_text));
+    }
 
     Ok(())
 }
