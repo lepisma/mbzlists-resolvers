@@ -1,8 +1,9 @@
 use actix_session::Session;
-use actix_web::{get, web, HttpResponse, Responder};
+use actix_web::{get, web, error, HttpResponse, Responder};
 use serde::Deserialize;
 use url::Url;
 use askama::Template;
+use anyhow::{Result, anyhow};
 
 use crate::webapp::{PlCreatePageTemplate, PlCreatedPageTemplate};
 
@@ -13,12 +14,19 @@ struct LoginQuery {
 }
 
 #[get("/youtube/login")]
-pub async fn login(query: web::Query<LoginQuery>, session: Session) -> impl Responder {
-    let client_id = std::env::var("GOOGLE_CLIENT_ID").unwrap();
-    let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI").unwrap();
+pub async fn login(query: web::Query<LoginQuery>, session: Session) -> Result<impl Responder, error::Error> {
+    let client_id = std::env::var("GOOGLE_CLIENT_ID").map_err(|_| {
+        error::ErrorInternalServerError(anyhow!("Missing GOOGLE_CLIENT_ID env variable"))
+    })?;
+
+    let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI").map_err(|_| {
+        error::ErrorInternalServerError(anyhow!("Missing GOOGLE_REDIRECT_URL env variable"))
+    })?;
 
     if let Some(mbzlists_url) = &query.mbzlists_url {
-        session.insert("mbzlists_url", mbzlists_url).unwrap();
+        session.insert("mbzlists_url", mbzlists_url).map_err(|_| {
+            error::ErrorInternalServerError(anyhow!("Unable to set session variable `mbzlists_url`"))
+        })?;
     }
 
     let auth_url = Url::parse_with_params(
@@ -31,12 +39,13 @@ pub async fn login(query: web::Query<LoginQuery>, session: Session) -> impl Resp
             ("access_type", &"offline".to_string()),
             ("prompt", &"consent".to_string()),
         ],
-    )
-    .unwrap();
+    ).map_err(|_| {
+        error::ErrorInternalServerError(anyhow!("Unable to create auth_url"))
+    })?;
 
-    HttpResponse::Found()
+    Ok(HttpResponse::Found()
         .append_header(("Location", auth_url.to_string()))
-        .finish()
+        .finish())
 }
 
 #[derive(Deserialize)]
