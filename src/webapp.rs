@@ -1,4 +1,5 @@
 use crate::platform::spotify;
+use crate::platform::youtube;
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
 use actix_web::{cookie::Key, get, http::StatusCode, App, HttpResponse, HttpServer, Responder};
 use askama::Template;
@@ -29,6 +30,9 @@ pub async fn serve() -> std::io::Result<()> {
             .service(spotify::login)
             .service(spotify::callback)
             .service(spotify::create)
+            .service(youtube::login)
+            .service(youtube::callback)
+            .service(youtube::create)
     })
     .bind((host, port))?
     .run()
