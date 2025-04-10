@@ -12,10 +12,11 @@ For subsonic compatible media servers (including navidrome), do this:
   mbzlists-resolvers subsonic <spiff-file> [playlist-name]
 #+end_src
 
-For Spotify, open the webapp and follow instructions:
+For Spotify and YouTube export, open the webapp and follow instructions:
 
 #+begin_src shell
-  # Set SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI
+  # Set SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI for Spotify
+  # Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI for YouTube
   # Use MBZR_HOST and MBZR_PORT to control networking
   mbzlists-resolvers webapp
 #+end_src
