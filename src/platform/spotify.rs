@@ -20,10 +20,21 @@ struct SpotifyCreatedPageTemplate<'a> {
 
 const API_ROOT: &str = "https://api.spotify.com/v1";
 
+#[derive(serde::Deserialize)]
+struct LoginQuery {
+    mbzlists_url: Option<String>,
+}
+
 #[get("/spotify/login")]
-pub async fn login() -> impl Responder {
+pub async fn login(query: web::Query<LoginQuery>, session: Session) -> impl Responder {
     let client_id = std::env::var("SPOTIFY_CLIENT_ID").unwrap();
     let redirect_uri = std::env::var("SPOTIFY_REDIRECT_URI").unwrap();
+
+    if let Some(mbzlists_url) = &query.mbzlists_url {
+        // If the user is coming here with a url already, save that in the
+        // session so that we can bypass the input form
+        session.insert("mbzlists_url", mbzlists_url).unwrap();
+    }
 
     let auth_url = Url::parse_with_params(
         "https://accounts.spotify.com/authorize",
@@ -203,8 +214,14 @@ pub async fn callback(query: web::Query<AuthQuery>, session: Session) -> impl Re
     session.insert("access_token", &access_token).unwrap();
     session.insert("user_id", &user_id).unwrap();
 
-    let body = (SpotifyUploadPageTemplate {}).render().unwrap();
+    // If an mbzlists url is saved in session, we will directly use that, else
+    // will ask user to input the url via a form.
+    if let Some(mbzlists_url) = session.get::<String>("mbzlists_url").unwrap_or(None) {
+        let create_url = format!("/spotify/create?mbzlists_url={}", mbzlists_url);
+        return HttpResponse::Found().append_header(("Location", create_url)).finish();
+    }
 
+    let body = (SpotifyUploadPageTemplate {}).render().unwrap();
     HttpResponse::build(StatusCode::OK)
         .content_type("text/html; charset=utf-8")
         .body(body)
@@ -212,25 +229,25 @@ pub async fn callback(query: web::Query<AuthQuery>, session: Session) -> impl Re
 
 #[derive(serde::Deserialize)]
 struct CreateQuery {
-    url: String,
+    mbzlists_url: String,
 }
 
 #[get("/spotify/create")]
 pub async fn create(query: web::Query<CreateQuery>, session: Session) -> impl Responder {
-    let mbzlist_url = query.url.clone();
+    let mbzlists_url = query.mbzlists_url.clone();
     let access_token: Option<String> = session.get("access_token").unwrap_or(None);
     let user_id: Option<String> = session.get("user_id").unwrap_or(None);
 
     if access_token.is_none() || user_id.is_none() {
         return HttpResponse::Found()
-            .append_header(("Location", "/spotify/login"))
+            .append_header(("Location", format!("/spotify/login?mbzlists_url={mbzlists_url}")))
             .finish();
     }
 
     let access_token = access_token.unwrap();
     let user_id = user_id.unwrap();
 
-    let playlist = mbzlists::Playlist::from_url(mbzlist_url).await.unwrap();
+    let playlist = mbzlists::Playlist::from_url(mbzlists_url).await.unwrap();
 
     let mut sp_tracks = Vec::new();
 
