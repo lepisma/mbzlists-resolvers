@@ -3,29 +3,22 @@ use actix_web::{get, http::StatusCode, web, HttpResponse, Responder};
 use log::debug;
 use url::Url;
 use anyhow::Result;
+use askama::Template;
 
 use crate::mbzlists::{self, Track};
-use crate::view::generate_page;
+
+
+#[derive(Template)]
+#[template(path = "sp_upload.html")]
+struct SpotifyUploadPageTemplate {}
+
+#[derive(Template)]
+#[template(path = "sp_created.html")]
+struct SpotifyCreatedPageTemplate<'a> {
+    playlist_url: &'a str,
+}
 
 const API_ROOT: &str = "https://api.spotify.com/v1";
-
-fn generate_spotify_upload_page() -> String {
-    generate_page("<div class=\"card\">
-  <h2><i>mbzlists → Spotify Exporter</i></h2>
-  <p>Enter the playlist view-URL</p>
-  <form action=\"/spotify/create\" method=\"GET\">
-    <input type=\"text\" name=\"url\" placeholder=\"Enter mbzlists URL\" style=\"padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ccc; border-radius: 4px; font-family: monospace;\">
-    <button type=\"submit\" class=\"btn\">Submit</button>
-  </form>
-</div>")
-}
-
-fn generate_playlist_success_page(playlist_url: String) -> String {
-    generate_page(&format!("<div class=\"card\">
-  <h2>Spotify Playlist Created</h2>
-  <a class=\"btn\" href=\"{playlist_url}\">Open Playlist</a>
-</div>"))
-}
 
 #[get("/spotify/login")]
 pub async fn login() -> impl Responder {
@@ -210,9 +203,11 @@ pub async fn callback(query: web::Query<AuthQuery>, session: Session) -> impl Re
     session.insert("access_token", &access_token).unwrap();
     session.insert("user_id", &user_id).unwrap();
 
+    let body = (SpotifyUploadPageTemplate {}).render().unwrap();
+
     HttpResponse::build(StatusCode::OK)
         .content_type("text/html; charset=utf-8")
-        .body(generate_spotify_upload_page())
+        .body(body)
 }
 
 #[derive(serde::Deserialize)]
@@ -247,7 +242,9 @@ pub async fn create(query: web::Query<CreateQuery>, session: Session) -> impl Re
 
     let spotify_playlist = create_playlist(&playlist.title, sp_tracks, &user_id, &access_token).await.unwrap();
 
+    let body = (SpotifyCreatedPageTemplate { playlist_url: &spotify_playlist.url }).render().unwrap();
+
     HttpResponse::build(StatusCode::OK)
         .content_type("text/html; charset=utf-8")
-        .body(generate_playlist_success_page(spotify_playlist.url))
+        .body(body)
 }

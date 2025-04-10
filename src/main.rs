@@ -5,7 +5,6 @@ use anyhow::Result;
 
 mod platform;
 mod webapp;
-mod view;
 mod mbzlists;
 
 #[derive(Parser, Debug)]

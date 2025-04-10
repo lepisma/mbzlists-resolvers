@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+
+{% block body %}
+<h1><a href="/">mbzlists-resolvers</a></h1>
+<p>Source code <a href="https://github.com/lepisma/mbzlists-resolvers">here</a></p>
+
+<div class="card">
+    <h2>Export to Spotify</h2>
+    <p>Continue by logging in to import an mbzlists playlist to your Spotify account.</p>
+    <a class="btn" href="/spotify/login">Proceed to Login</a>
+</div>
+
+<div class="card">
+    <h2>Export to Subsonic Compatible Server</h2>
+    <p>You can import XSPF files from mbzlists to any subsonic compatible media server using the mbzlists-resolvers command line tool.</p>
+    <a class="btn" href="https://github.com/lepisma/mbzlists-resolvers">Open Documentation</a>
+</div>
+{% endblock %}
