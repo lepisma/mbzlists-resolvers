@@ -90,7 +90,7 @@ pub async fn create(query: web::Query<CreateQuery>, session: Session) -> Result<
 
     let access_token = access_token.unwrap();
 
-    let playlist = crate::mbzlists::Playlist::from_url(mbzlists_url.clone()).await.map_err(error::ErrorInternalServerError)?;
+    let playlist = crate::mbzlists::Playlist::from_url(&mbzlists_url).await.map_err(error::ErrorInternalServerError)?;
     let yt_playlist_id = create_yt_playlist(&playlist.title, &access_token).await.map_err(error::ErrorInternalServerError)?;
 
     for track in playlist.tracklist.tracks {

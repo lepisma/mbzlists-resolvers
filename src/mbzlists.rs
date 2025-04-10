@@ -14,18 +14,18 @@ impl Playlist {
         Ok(serde_xml_rs::from_str(&xspf_string)?)
     }
 
-    pub async fn from_url(url: String) -> Result<Playlist> {
-        let parsed = Url::parse(&url)?;
-        let host = parsed.host_str().map(|s| s.to_string());
+    pub async fn from_url(url: &str) -> Result<Playlist> {
+        let parsed = Url::parse(url)?;
+        let host = parsed.host_str();
 
         match parsed.path_segments().unwrap().last() {
-            Some(view_id) => Playlist::from_view_id(view_id.to_string(), host).await,
+            Some(view_id) => Playlist::from_view_id(view_id, host).await,
             None => Err(anyhow!("Malformed url: {url}"))
         }
     }
 
-    pub async fn from_view_id(view_id: String, host: Option<String>) -> Result<Playlist> {
-        let host = host.unwrap_or("mbzlists.com".to_string());
+    pub async fn from_view_id(view_id: &str, host: Option<&str>) -> Result<Playlist> {
+        let host = host.unwrap_or("mbzlists.com");
         let response = reqwest::get(format!("https://{host}/api/list/{view_id}?type=xspf")).await?;
         let bytes = response.bytes().await?;
         let body = String::from_utf8(bytes.to_vec()).expect("body is not valid UTF8!");

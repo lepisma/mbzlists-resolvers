@@ -242,7 +242,7 @@ pub async fn create(query: web::Query<CreateQuery>, session: Session) -> impl Re
     let access_token = access_token.unwrap();
     let user_id = user_id.unwrap();
 
-    let playlist = mbzlists::Playlist::from_url(mbzlists_url).await.unwrap();
+    let playlist = mbzlists::Playlist::from_url(&mbzlists_url).await.unwrap();
 
     let mut sp_tracks = Vec::new();
 
