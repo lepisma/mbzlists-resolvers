@@ -9,6 +9,21 @@ use askama::Template;
 #[template(path = "home.html")]
 struct HomePageTemplate {}
 
+#[derive(Template)]
+#[template(path = "playlist_create.html")]
+pub struct PlCreatePageTemplate<'a> {
+    pub app_name: &'a str,
+    pub app_slug: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "playlist_created.html")]
+pub struct PlCreatedPageTemplate<'a> {
+    pub app_name: &'a str,
+    pub playlist_url: &'a str,
+}
+
+
 #[get("/")]
 async fn home() -> impl Responder {
     let body = (HomePageTemplate {}).render().unwrap();

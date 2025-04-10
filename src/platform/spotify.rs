@@ -5,18 +5,8 @@ use url::Url;
 use anyhow::Result;
 use askama::Template;
 
-use crate::mbzlists::{self, Track};
+use crate::{mbzlists::{self, Track}, webapp::{PlCreatePageTemplate, PlCreatedPageTemplate}};
 
-
-#[derive(Template)]
-#[template(path = "sp_upload.html")]
-struct SpotifyUploadPageTemplate {}
-
-#[derive(Template)]
-#[template(path = "sp_created.html")]
-struct SpotifyCreatedPageTemplate<'a> {
-    playlist_url: &'a str,
-}
 
 const API_ROOT: &str = "https://api.spotify.com/v1";
 
@@ -221,7 +211,12 @@ pub async fn callback(query: web::Query<AuthQuery>, session: Session) -> impl Re
         return HttpResponse::Found().append_header(("Location", create_url)).finish();
     }
 
-    let body = (SpotifyUploadPageTemplate {}).render().unwrap();
+    let body = (PlCreatePageTemplate {
+        app_name: "Spotify",
+        app_slug: "spotify",
+    })
+        .render()
+        .unwrap();
     HttpResponse::build(StatusCode::OK)
         .content_type("text/html; charset=utf-8")
         .body(body)
@@ -259,7 +254,12 @@ pub async fn create(query: web::Query<CreateQuery>, session: Session) -> impl Re
 
     let spotify_playlist = create_playlist(&playlist.title, sp_tracks, &user_id, &access_token).await.unwrap();
 
-    let body = (SpotifyCreatedPageTemplate { playlist_url: &spotify_playlist.url }).render().unwrap();
+    let body = (PlCreatedPageTemplate {
+        app_name: "Spotify",
+        playlist_url: &spotify_playlist.url
+    })
+        .render()
+        .unwrap();
 
     HttpResponse::build(StatusCode::OK)
         .content_type("text/html; charset=utf-8")

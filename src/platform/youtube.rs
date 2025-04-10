@@ -1,18 +1,11 @@
 use actix_session::Session;
 use actix_web::{get, web, HttpResponse, Responder};
-use askama::Template;
 use serde::Deserialize;
 use url::Url;
+use askama::Template;
 
-#[derive(Template)]
-#[template(path = "yt_upload.html")]
-struct YoutubeUploadPageTemplate {}
+use crate::webapp::{PlCreatePageTemplate, PlCreatedPageTemplate};
 
-#[derive(Template)]
-#[template(path = "yt_created.html")]
-struct YoutubeCreatedPageTemplate<'a> {
-    playlist_url: &'a str,
-}
 
 #[derive(Deserialize)]
 struct LoginQuery {
@@ -61,7 +54,12 @@ pub async fn callback(query: web::Query<AuthQuery>, session: Session) -> impl Re
         return HttpResponse::Found().append_header(("Location", create_url)).finish();
     }
 
-    let body = (YoutubeUploadPageTemplate {}).render().unwrap();
+    let body = (PlCreatePageTemplate {
+        app_name: "YouTube",
+        app_slug: "youtube",
+    })
+        .render()
+        .unwrap();
     HttpResponse::Ok().content_type("text/html").body(body)
 }
 
@@ -94,11 +92,12 @@ pub async fn create(query: web::Query<CreateQuery>, session: Session) -> impl Re
     }
 
     let playlist_url = format!("https://www.youtube.com/playlist?list={}", yt_playlist_id);
-    let body = (YoutubeCreatedPageTemplate {
+    let body = (PlCreatedPageTemplate {
+        app_name: "YouTube",
         playlist_url: &playlist_url,
     })
-    .render()
-    .unwrap();
+        .render()
+        .unwrap();
 
     HttpResponse::Ok().content_type("text/html").body(body)
 }

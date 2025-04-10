@@ -5,9 +5,9 @@
 <p>Source code <a href="https://github.com/lepisma/mbzlists-resolvers">here</a></p>
 
 <div class="card">
-    <h2>Export to YouTube</h2>
+    <h2>Export to {{ app_name }}</h2>
     <p>Enter the playlist view-URL</p>
-    <form action="/youtube/create" method="GET">
+    <form action="/{{ app_slug }}/create" method="GET">
         <input type="text" name="mbzlists_url" placeholder="Enter mbzlists URL">
         <button type="submit" class="btn">Submit</button>
     </form>
