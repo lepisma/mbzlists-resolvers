@@ -8,6 +8,161 @@ use anyhow::{Context, Result, anyhow};
 use crate::webapp::{PlCreatePageTemplate, PlCreatedPageTemplate};
 
 
+struct YouTubeVideo {
+    id: String,
+}
+
+struct YouTubePlaylist {
+    id: String,
+    title: String,
+    description: String,
+    is_private: bool,
+}
+
+async fn resolve(title: &str, artist: &str, access_token: &str) -> Result<YouTubeVideo> {
+    let query = format!("{} {}", title, artist);
+    let url = format!(
+        "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q={}",
+        urlencoding::encode(&query)
+    );
+
+    let client = reqwest::Client::new();
+    let res = client
+        .get(&url)
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .context("Failed to send search request")?;
+
+    let status = res.status();
+    let body = res.text().await.context("Failed to read search response body")?;
+
+    if status != reqwest::StatusCode::OK {
+        return Err(anyhow!("YouTube search failed: {} - {}", status, body));
+    }
+
+    let json: serde_json::Value = serde_json::from_str(&body).context("Failed to parse search JSON response")?;
+
+    let video_id = json["items"]
+        .get(0)
+        .and_then(|item| item.get("id"))
+        .and_then(|id| id.get("videoId"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("No videoId found in search results"))?;
+
+    Ok(YouTubeVideo { id: video_id.to_string() })
+}
+
+async fn create_playlist(title: &str, access_token: &str) -> Result<YouTubePlaylist> {
+    let body = serde_json::json!({
+        "snippet": {
+            "title": title,
+            "description": "Imported from mbzlists"
+        },
+        "status": {
+            "privacyStatus": "private"
+        }
+    });
+
+    let client = reqwest::Client::new();
+    let res = client
+        .post("https://www.googleapis.com/youtube/v3/playlists?part=snippet,status")
+        .bearer_auth(access_token)
+        .json(&body)
+        .send()
+        .await
+        .context("Failed to send create playlist request")?;
+
+    let status = res.status();
+    let body = res.text().await.context("Failed to read playlist response body")?;
+
+    if status != reqwest::StatusCode::OK {
+        return Err(anyhow!("YouTube playlist creation failed: {} - {}", status, body));
+    }
+
+    let json: serde_json::Value =serde_json::from_str(&body).context("Failed to parse playlist JSON response")?;
+
+    let playlist_id = json
+        .get("id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing playlist ID in response"))?;
+
+    Ok(YouTubePlaylist {
+        id: playlist_id.to_string(),
+        title: title.to_string(),
+        description: "Imported from mbzlists".to_string(),
+        is_private: true,
+    })
+}
+
+async fn add_video_to_playlist(playlist: &YouTubePlaylist, video: &YouTubeVideo, access_token: &str) -> Result<()> {
+    let body = serde_json::json!({
+        "snippet": {
+            "playlistId": playlist.id,
+            "resourceId": {
+                "kind": "youtube#video",
+                "videoId": video.id
+            }
+        }
+    });
+
+    let client = reqwest::Client::new();
+    let res = client
+        .post("https://www.googleapis.com/youtube/v3/playlistItems?part=snippet")
+        .bearer_auth(access_token)
+        .json(&body)
+        .send()
+        .await
+        .context("Failed to send add-to-playlist request")?;
+
+    let status = res.status();
+    let body_text = res.text().await.context("Failed to read add-to-playlist response body")?;
+
+    if status != reqwest::StatusCode::OK {
+        return Err(anyhow!("Failed to add video to playlist: {} - {}", status, body_text));
+    }
+
+    Ok(())
+}
+
+async fn get_access_token(auth_code: &str) -> Result<String> {
+    let client_id = std::env::var("GOOGLE_CLIENT_ID").context("Missing GOOGLE_CLIENT_ID env variable")?;
+    let client_secret = std::env::var("GOOGLE_CLIENT_SECRET").context("Missing GOOGLE_CLIENT_SECRET env variable")?;
+    let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI").context("Missing GOOGLE_REDIRECT_URI env variable")?;
+
+    let params = [
+        ("code", auth_code),
+        ("client_id", &client_id),
+        ("client_secret", &client_secret),
+        ("redirect_uri", &redirect_uri),
+        ("grant_type", "authorization_code"),
+    ];
+
+    let client = reqwest::Client::new();
+    let res = client
+        .post("https://oauth2.googleapis.com/token")
+        .form(&params)
+        .send()
+        .await
+        .context("Failed to send token request")?;
+
+    let status = res.status();
+    let body = res.text().await.context("Failed to read response body")?;
+
+    if status != reqwest::StatusCode::OK {
+        return Err(anyhow!("Token exchange failed: {} - {}", status, body));
+    }
+
+    let json: serde_json::Value = serde_json::from_str(&body).context("Failed to parse JSON response")?;
+
+    let token = json
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing access_token in response: {}", json))?;
+
+    Ok(token.to_string())
+}
+
 #[derive(Deserialize)]
 struct LoginQuery {
     mbzlists_url: Option<String>,
@@ -55,8 +210,10 @@ struct AuthQuery {
 
 #[get("/youtube/callback")]
 pub async fn callback(query: web::Query<AuthQuery>, session: Session) -> Result<impl Responder, error::Error> {
-    let access_token = get_access_token(&query.code).await.unwrap();
-    session.insert("access_token", &access_token).unwrap();
+    let access_token = get_access_token(&query.code).await.map_err(error::ErrorInternalServerError)?;
+    session.insert("access_token", &access_token).map_err(|_| {
+        error::ErrorInternalServerError(anyhow!("Unable to set session variable `access_token`"))
+    })?;
 
     if let Some(mbzlists_url) = session.get::<String>("mbzlists_url").unwrap_or(None) {
         let create_url = format!("/youtube/create?mbzlists_url={}", mbzlists_url);
@@ -68,7 +225,8 @@ pub async fn callback(query: web::Query<AuthQuery>, session: Session) -> Result<
         app_slug: "youtube",
     })
         .render()
-        .unwrap();
+        .map_err(error::ErrorInternalServerError)?;
+
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
 }
 
@@ -91,165 +249,24 @@ pub async fn create(query: web::Query<CreateQuery>, session: Session) -> Result<
     let access_token = access_token.unwrap();
 
     let playlist = crate::mbzlists::Playlist::from_url(&mbzlists_url).await.map_err(error::ErrorInternalServerError)?;
-    let yt_playlist_id = create_yt_playlist(&playlist.title, &access_token).await.map_err(error::ErrorInternalServerError)?;
+    let yt_playlist = create_playlist(&playlist.title, &access_token).await.map_err(error::ErrorInternalServerError)?;
 
     for track in playlist.tracklist.tracks {
-        match search_youtube(&track.title, &track.creator, &access_token).await {
-            Ok(video_id) => add_video_to_playlist(&yt_playlist_id, &video_id, &access_token).await.map_err(error::ErrorInternalServerError)?,
+        match resolve(&track.title, &track.creator, &access_token).await {
+            Ok(video) => add_video_to_playlist(&yt_playlist, &video, &access_token).await.map_err(error::ErrorInternalServerError)?,
             // This is a little aggressive, but there are very less chance of a
             // youtube search not returning anything in normal cases
             Err(err) => return Err(error::ErrorInternalServerError(err))
         }
     }
 
-    let playlist_url = format!("https://www.youtube.com/playlist?list={}", yt_playlist_id);
+    let playlist_url = format!("https://www.youtube.com/playlist?list={}", yt_playlist.id);
     let body = (PlCreatedPageTemplate {
         app_name: "YouTube",
         playlist_url: &playlist_url,
     })
         .render()
-        .unwrap();
+        .map_err(error::ErrorInternalServerError)?;
 
     Ok(HttpResponse::Ok().content_type("text/html").body(body))
-}
-
-async fn get_access_token(code: &str) -> Result<String> {
-    let client_id = std::env::var("GOOGLE_CLIENT_ID").context("Missing GOOGLE_CLIENT_ID env variable")?;
-    let client_secret = std::env::var("GOOGLE_CLIENT_SECRET").context("Missing GOOGLE_CLIENT_SECRET env variable")?;
-    let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI").context("Missing GOOGLE_REDIRECT_URI env variable")?;
-
-    let params = [
-        ("code", code),
-        ("client_id", &client_id),
-        ("client_secret", &client_secret),
-        ("redirect_uri", &redirect_uri),
-        ("grant_type", "authorization_code"),
-    ];
-
-    let client = reqwest::Client::new();
-    let res = client
-        .post("https://oauth2.googleapis.com/token")
-        .form(&params)
-        .send()
-        .await
-        .context("Failed to send token request")?;
-
-    let status = res.status();
-    let body = res.text().await.context("Failed to read response body")?;
-
-    if status != reqwest::StatusCode::OK {
-        return Err(anyhow!("Token exchange failed: {} - {}", status, body));
-    }
-
-    let json: serde_json::Value = serde_json::from_str(&body).context("Failed to parse JSON response")?;
-
-    let token = json
-        .get("access_token")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("Missing access_token in response"))?;
-
-    Ok(token.to_string())
-}
-
-async fn create_yt_playlist(title: &str, access_token: &str) -> Result<String> {
-    let body = serde_json::json!({
-        "snippet": {
-            "title": title,
-            "description": "Imported from mbzlists"
-        },
-        "status": {
-            "privacyStatus": "private"
-        }
-    });
-
-    let client = reqwest::Client::new();
-    let res = client
-        .post("https://www.googleapis.com/youtube/v3/playlists?part=snippet,status")
-        .bearer_auth(access_token)
-        .json(&body)
-        .send()
-        .await
-        .context("Failed to send create playlist request")?;
-
-    let status = res.status();
-    let body_text = res.text().await.context("Failed to read playlist response body")?;
-
-    if status != reqwest::StatusCode::OK {
-        return Err(anyhow!("YouTube playlist creation failed: {} - {}", status, body_text));
-    }
-
-    let json: serde_json::Value =
-        serde_json::from_str(&body_text).context("Failed to parse playlist JSON response")?;
-
-    let playlist_id = json
-        .get("id")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("Missing playlist ID in response"))?;
-
-    Ok(playlist_id.to_string())
-}
-
-async fn search_youtube(title: &str, artist: &str, access_token: &str) -> Result<String> {
-    let query = format!("{} {}", title, artist);
-    let url = format!(
-        "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q={}",
-        urlencoding::encode(&query)
-    );
-
-    let client = reqwest::Client::new();
-    let res = client
-        .get(&url)
-        .bearer_auth(access_token)
-        .send()
-        .await
-        .context("Failed to send search request")?;
-
-    let status = res.status();
-    let body_text = res.text().await.context("Failed to read search response body")?;
-
-    if status != reqwest::StatusCode::OK {
-        return Err(anyhow!("YouTube search failed: {} - {}", status, body_text));
-    }
-
-    let json: serde_json::Value =
-        serde_json::from_str(&body_text).context("Failed to parse search JSON response")?;
-
-    let video_id = json["items"]
-        .get(0)
-        .and_then(|item| item.get("id"))
-        .and_then(|id| id.get("videoId"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("No videoId found in search results"))?;
-
-    Ok(video_id.to_string())
-}
-
-async fn add_video_to_playlist(playlist_id: &str, video_id: &str, access_token: &str) -> Result<()> {
-    let body = serde_json::json!({
-        "snippet": {
-            "playlistId": playlist_id,
-            "resourceId": {
-                "kind": "youtube#video",
-                "videoId": video_id
-            }
-        }
-    });
-
-    let client = reqwest::Client::new();
-    let res = client
-        .post("https://www.googleapis.com/youtube/v3/playlistItems?part=snippet")
-        .bearer_auth(access_token)
-        .json(&body)
-        .send()
-        .await
-        .context("Failed to send add-to-playlist request")?;
-
-    let status = res.status();
-    let body_text = res.text().await.context("Failed to read add-to-playlist response body")?;
-
-    if status != reqwest::StatusCode::OK {
-        return Err(anyhow!("Failed to add video to playlist: {} - {}", status, body_text));
-    }
-
-    Ok(())
 }
