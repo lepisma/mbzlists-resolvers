@@ -1,83 +1,18 @@
 <!DOCTYPE html>
-<html lang=\"en\">
+<html lang="en">
 <head>
-  <meta charset=\"UTF-8\">
-  <title>{% block title %}mbzlists-resolvers{% endblock %}</title>
-  <style>
-   body {
-       font-family: monospace;
-       font-size: 16px;
-       margin: 2rem;
-       background: #f4f4f4;
-       color: #333;
-   }
-   p {
-       color: #555;
-   }
-   .btn {
-       background: #444;
-       color: white;
-       border: none;
-       padding: 2px 10px;
-       margin: 10px 0px;
-       border-radius: 5px;
-       cursor: pointer;
-       font-family: inherit;
-       text-decoration: none;
-   }
-   .btn:hover {
-       background: #222;
-   }
-   input {
-       border: none;
-       padding: 2px 10px;
-       margin: 10px 0px;
-       border-radius: 5px;
-   }
-   .card {
-       background: #e0e0e0;
-       border-radius: 8px;
-       padding: 20px;
-       margin-bottom: 10px;
-       box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-   }
-   .navbar {
-       background: #ddd;
-       padding: 0.5rem 1rem;
-       border-radius: 8px;
-       display: flex;
-       justify-content: space-between;
-       align-items: center;
-       margin-bottom: 20px;
-       font-size: 14px;
-   }
-
-   .nav-title {
-       text-decoration: none;
-       color: #333;
-       font-weight: bold;
-       margin-right: 5px;
-   }
-
-   .nav-subtitle {
-       color: #666;
-   }
-
-   .nav-link {
-       text-decoration: none;
-       color: #333;
-   }
-
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>{% block title %}mbzlists-resolvers{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <nav class="navbar">
-        <div class="navbar-left">
-            <a href="/" class="nav-title">mbzlists-resolvers</a>
-            <span class="nav-subtitle">Playlist exporters and content resolvers for <a href="https://mbzlists.com">mbzlists.com</a></span>
+<body class="font-mono text-base m-8 bg-gray-100 text-gray-800">
+    <nav class="bg-gray-300 p-2 sm:px-4 rounded-lg flex flex-col sm:flex-row justify-between items-center mb-5 text-sm">
+        <div class="flex flex-col sm:flex-row items-center mb-2 sm:mb-0">
+            <a href="/" class="no-underline text-gray-800 font-bold mr-1">mbzlists-resolvers</a>
+            <span class="text-gray-600 text-center sm:text-left">Playlist exporters and content resolvers for <a href="https://mbzlists.com" class="text-blue-600 hover:underline">mbzlists.com</a></span>
         </div>
-        <div class="navbar-right">
-            <a href="https://github.com/lepisma/mbzlists-resolvers" class="nav-link">Source code</a>
+        <div class="flex-shrink-0">
+            <a href="https://github.com/lepisma/mbzlists-resolvers" class="no-underline text-gray-800 hover:text-gray-600">Source code</a>
         </div>
     </nav>
     {% block body %}{% endblock %}

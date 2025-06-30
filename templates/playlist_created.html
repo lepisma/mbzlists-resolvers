@@ -1,8 +1,8 @@
 {% extends "layout.html" %}
 
 {% block body %}
-<div class="card">
-    <h2>{{ app_name }} Playlist Created</h2>
-    <a class="btn" href="{{ playlist_url }}">Open Playlist</a>
+<div class="bg-gray-200 rounded-lg p-5 mb-3 shadow-md text-center">
+    <h2 class="text-lg font-bold mb-4">{{ app_name }} Playlist Created</h2>
+    <a class="bg-gray-700 text-white px-4 py-2 rounded-md cursor-pointer hover:bg-gray-800 no-underline inline-block" href="{{ playlist_url }}">Open Playlist</a>
 </div>
 {% endblock %}

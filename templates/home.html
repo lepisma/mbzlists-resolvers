@@ -1,21 +1,21 @@
 {% extends "layout.html" %}
 
 {% block body %}
-<div class="card">
-    <h2>Export to Spotify</h2>
-    <p>Continue by logging in to import an mbzlists playlist to your Spotify account.</p>
-    <a class="btn" href="/spotify/login">Proceed to Login</a>
+<div class="bg-gray-200 rounded-lg p-5 mb-3 shadow-md">
+    <h2 class="text-lg font-bold mb-2">Export to Spotify</h2>
+    <p class="text-gray-600 mb-4">Continue by logging in to import an mbzlists playlist to your Spotify account.</p>
+    <a class="bg-gray-700 text-white px-4 py-2 rounded-md cursor-pointer hover:bg-gray-800 no-underline inline-block" href="/spotify/login">Proceed to Login</a>
 </div>
 
-<div class="card">
-    <h2>Export to YouTube</h2>
-    <p>Continue by logging in to import an mbzlists playlist to your YouTube account.</p>
-    <a class="btn" href="/youtube/login">Proceed to Login</a>
+<div class="bg-gray-200 rounded-lg p-5 mb-3 shadow-md">
+    <h2 class="text-lg font-bold mb-2">Export to YouTube</h2>
+    <p class="text-gray-600 mb-4">Continue by logging in to import an mbzlists playlist to your YouTube account.</p>
+    <a class="bg-gray-700 text-white px-4 py-2 rounded-md cursor-pointer hover:bg-gray-800 no-underline inline-block" href="/youtube/login">Proceed to Login</a>
 </div>
 
-<div class="card">
-    <h2>Export to Subsonic Compatible Server</h2>
-    <p>You can import XSPF files from mbzlists to any subsonic compatible media server using the mbzlists-resolvers command line tool.</p>
-    <a class="btn" href="https://github.com/lepisma/mbzlists-resolvers">Open Documentation</a>
+<div class="bg-gray-200 rounded-lg p-5 mb-3 shadow-md">
+    <h2 class="text-lg font-bold mb-2">Export to Subsonic Compatible Server</h2>
+    <p class="text-gray-600 mb-4">You can import XSPF files from mbzlists to any subsonic compatible media server using the mbzlists-resolvers command line tool.</p>
+    <a class="bg-gray-700 text-white px-4 py-2 rounded-md cursor-pointer hover:bg-gray-800 no-underline inline-block" href="https://github.com/lepisma/mbzlists-resolvers">Open Documentation</a>
 </div>
 {% endblock %}
